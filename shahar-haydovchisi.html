@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Shahar haydovchisi</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#0a0c14;--text:#f2f4fa;--mute:#98a1b8;--acc:#ffb800;--pink:#ff3d8b}
+html,body{height:100%}*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none}
+.game{position:relative;height:100%}
+canvas{width:100%;height:100%;display:block}
+.hud{position:absolute;left:12px;top:10px;display:flex;flex-direction:column;gap:2px;font-weight:700;font-variant-numeric:tabular-nums;text-shadow:0 1px 6px #000}
+.hud .big{font-size:34px;line-height:1}.hud small{font-size:12px;font-weight:500;color:var(--mute)}
+.ctl{position:absolute;left:0;right:0;bottom:12px;display:flex;justify-content:space-between;padding:0 12px;pointer-events:none}
+.ctl div{display:flex;gap:10px;pointer-events:auto}
+button{font:inherit;font-weight:700;border:0;border-radius:16px;color:#fff;background:#ffffff26;backdrop-filter:blur(6px);width:72px;height:72px;font-size:24px;touch-action:none}
+button:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+button.g{background:#1fa971cc;width:84px}button.b{background:#e02f44cc}
+button:active{filter:brightness(1.4)}
+.msg{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;text-align:center;padding:20px;background:#0a0c14d9}
+.msg.hide{display:none}.msg h2{margin:0;font-size:32px}.msg p{margin:0;color:var(--mute);max-width:320px}
+.msg button{width:auto;height:auto;padding:14px 28px;font-size:16px;background:var(--acc);color:#1b1f27;border-radius:12px}
+</style>
+</head>
+<body>
+<div class="game">
+  <canvas id="cv"></canvas>
+  <div class="hud"><span class="big"><span id="spd">0</span> <small>km/soat</small></span><span>Ball: <span id="sc">0</span></span><span>Vaqt: <span id="tm">45</span></span></div>
+  <div class="ctl">
+    <div><button id="L" aria-label="Chapga">◀</button><button id="R" aria-label="O'ngga">▶</button></div>
+    <div><button id="B" class="b" aria-label="Tormoz">⏹</button><button id="G" class="g" aria-label="Gaz">▲</button></div>
+  </div>
+  <div class="msg" id="msg"><h2 id="mt">Shahar haydovchisi</h2><p id="mp">Tungi shaharda haydang. Sariq halqaga vaqtida yetib boring, har biri +15 soniya va ball beradi. Binolarga urilmang.</p><button id="go">Haydashni boshlash</button></div>
+</div>
+<script>
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+const N=8,CS=420,RW=120,WS=N*CS;
+let W,H,dpr,run=false,t=0,score=0,time=45,shake=0,zoom=1;
+const K={L:0,R:0,G:0,B:0,S:0};
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return(seed-1)/2147483646};
+const NEON=['#ff3d8b','#19d3e8','#8f6bff','#ffb800','#3ddc97','#ff6a3d'];
+const blocks=[];
+for(let i=0;i<N;i++)for(let j=0;j<N;j++){
+  const x=i*CS+RW/2,y=j*CS+RW/2,w=CS-RW,park=rnd()<.12;
+  const bl={x,y,w,h:w,park,b:[]};
+  if(!park){const g=10,cw=(w-g*3)/2;for(let a=0;a<2;a++)for(let c=0;c<2;c++)if(rnd()<.9)bl.b.push({x:x+g+a*(cw+g),y:y+g+c*(cw+g),w:cw,h:cw,ht:30+rnd()*110,col:NEON[Math.floor(rnd()*NEON.length)]})}
+  blocks.push(bl)}
+const CARC=['#cfd6e6','#5b7cff','#c9384a','#3a4256','#e9e2c8','#2fa37a'];
+const cars=[];
+for(let n=0;n<34;n++){const horiz=rnd()<.5,k=Math.floor(rnd()*(N+1)),dir=rnd()<.5?1:-1;
+  cars.push({horiz,k,dir,p:rnd()*WS,sp:(1.6+((k*3+(horiz?1:0)+(dir>0?2:0))%4)*.5),col:CARC[n%CARC.length],stun:0})}
+const me={x:CS,y:CS,a:0,vx:0,vy:0};
+let tgt={x:0,y:0};
+function newTarget(){let i,j;do{i=Math.floor(rnd()*(N+1));j=Math.floor(rnd()*(N+1))}while(Math.hypot(i*CS-me.x,j*CS-me.y)<600);tgt={x:i*CS,y:j*CS}}
+function size(){dpr=devicePixelRatio||1;W=cv.clientWidth;H=cv.clientHeight;cv.width=W*dpr;cv.height=H*dpr}
+function carPos(c){if(c.horiz)return{x:c.p,y:c.k*CS+c.dir*16,a:c.dir>0?0:Math.PI};return{x:c.k*CS-c.dir*16,y:c.p,a:c.dir>0?Math.PI/2:-Math.PI/2}}
+function drawCar(x,y,a,col,brake,head){
+  ctx.save();ctx.translate(x,y);ctx.rotate(a);
+  ctx.fillStyle='#0006';ctx.fillRect(-16,-8,38,22);
+  ctx.fillStyle=col;ctx.beginPath();ctx.roundRect(-18,-10,36,20,6);ctx.fill();
+  ctx.fillStyle='#0b0e18cc';ctx.beginPath();ctx.roundRect(-6,-8,13,16,3);ctx.fill();
+  ctx.fillStyle='#fff8d0';ctx.fillRect(15,-9,3,5);ctx.fillRect(15,4,3,5);
+  ctx.fillStyle=brake?'#ff2b3f':'#a01828';ctx.fillRect(-18,-9,2,5);ctx.fillRect(-18,4,2,5);
+  if(head){ctx.globalCompositeOperation='lighter';const g=ctx.createRadialGradient(18,0,4,90,0,110);g.addColorStop(0,'#fff2b855');g.addColorStop(1,'#fff2b800');
+    ctx.fillStyle=g;ctx.beginPath();ctx.moveTo(16,-6);ctx.lineTo(150,-52);ctx.lineTo(150,52);ctx.lineTo(16,6);ctx.fill();ctx.globalCompositeOperation='source-over'}
+  ctx.restore()}
+function update(k){
+  const fx=Math.cos(me.a),fy=Math.sin(me.a);
+  let sp=me.vx*fx+me.vy*fy,lat=-me.vx*fy+me.vy*fx;
+  if(K.G)sp+=.24*k;if(K.B)sp-=(sp>0?.45:.16)*k;
+  sp*=Math.pow(.992,k);sp=Math.max(-3.5,Math.min(11,sp));
+  lat*=Math.pow(K.S?.97:.86,k);
+  const st=(K.R-K.L)*.05*k*Math.max(-1,Math.min(1,sp/4))*(K.S?1.5:1);me.a+=st;
+  const f2x=Math.cos(me.a),f2y=Math.sin(me.a);
+  me.vx=f2x*sp-f2y*lat;me.vy=f2y*sp+f2x*lat;
+  me.x+=me.vx*k;me.y+=me.vy*k;
+  me.x=Math.max(-RW/2+18,Math.min(WS+RW/2-18,me.x));me.y=Math.max(-RW/2+18,Math.min(WS+RW/2-18,me.y));
+  for(const b of blocks){if(b.park)continue;if(Math.abs(me.x-(b.x+b.w/2))>b.w/2+30||Math.abs(me.y-(b.y+b.h/2))>b.h/2+30)continue;
+    const cx=Math.max(b.x,Math.min(b.x+b.w,me.x)),cy=Math.max(b.y,Math.min(b.y+b.h,me.y));let dx=me.x-cx,dy=me.y-cy,d=Math.hypot(dx,dy);
+    if(d<17){let nx,ny;if(d>0){nx=dx/d;ny=dy/d}else{const l=me.x-b.x,r=b.x+b.w-me.x,u=me.y-b.y,dn=b.y+b.h-me.y,m=Math.min(l,r,u,dn);nx=m===l?-1:m===r?1:0;ny=m===u?-1:m===dn?1:0;d=0}
+      me.x+=nx*(17-d);me.y+=ny*(17-d);const vn=me.vx*nx+me.vy*ny;if(vn<0){me.vx-=vn*nx*1.5;me.vy-=vn*ny*1.5;shake=Math.min(12,Math.abs(vn)*2)}}}
+  for(const c of cars){const s=c.stun>0?(c.stun--,.3):1;c.p+=c.dir*c.sp*s*k;if(c.p>WS+CS/2)c.p=-CS/2;if(c.p<-CS/2)c.p=WS+CS/2;
+    const q=carPos(c),dx=me.x-q.x,dy=me.y-q.y,d=Math.hypot(dx,dy);
+    if(d<30&&d>0){const nx=dx/d,ny=dy/d;me.x+=nx*(30-d);me.y+=ny*(30-d);const vn=me.vx*nx+me.vy*ny;if(vn<0){me.vx-=vn*nx*1.6;me.vy-=vn*ny*1.6}me.vx*=.85;me.vy*=.85;c.stun=45;shake=8}}
+  if(Math.hypot(me.x-tgt.x,me.y-tgt.y)<55){score+=100;time+=15;newTarget()}
+  time-=k/60;if(time<=0){time=0;run=false;$('mt').textContent='Vaqt tugadi';$('mp').textContent='Ball: '+score+'. Yana urinib ko\'ring!';$('go').textContent='Qayta haydash';$('msg').classList.remove('hide')}
+  score+=Math.abs(sp)>8?.02*k:0;
+  $('spd').textContent=Math.round(Math.abs(sp)*14);$('sc').textContent=Math.floor(score);$('tm').textContent=Math.ceil(time);
+  zoom+=((Math.max(.72,1-Math.abs(sp)*.025))-zoom)*.05*k
+}
+function draw(){
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#0d1019';ctx.fillRect(0,0,W,H);
+  const sx=shake>0?(Math.random()-.5)*shake:0,sy=shake>0?(Math.random()-.5)*shake:0;if(shake>0)shake*=.85;
+  const camX=me.x+me.vx*10,camY=me.y+me.vy*10;
+  ctx.save();ctx.translate(W/2+sx,H/2+sy);ctx.scale(zoom,zoom);ctx.translate(-camX,-camY);
+  const vw=W/zoom/2+120,vh=H/zoom/2+120,on=(x,y,w,h)=>x+w>camX-vw&&x<camX+vw&&y+h>camY-vh&&y<camY+vh;
+  ctx.fillStyle='#181c2b';for(let k=0;k<=N;k++){ctx.fillRect(k*CS-RW/2,-RW/2,RW,WS+RW);ctx.fillRect(-RW/2,k*CS-RW/2,WS+RW,RW)}
+  ctx.strokeStyle='#e8c34a99';ctx.lineWidth=3;ctx.setLineDash([26,22]);ctx.beginPath();
+  for(let k=0;k<=N;k++){ctx.moveTo(k*CS,-RW/2);ctx.lineTo(k*CS,WS+RW/2);ctx.moveTo(-RW/2,k*CS);ctx.lineTo(WS+RW/2,k*CS)}ctx.stroke();ctx.setLineDash([]);
+  for(const b of blocks){if(!on(b.x,b.y,b.w,b.h))continue;
+    ctx.fillStyle=b.park?'#10281f':'#242a3e';ctx.fillRect(b.x,b.y,b.w,b.h);
+    if(b.park){ctx.fillStyle='#1c4a37';for(let i=0;i<7;i++){ctx.beginPath();ctx.arc(b.x+40+((i*97)%(b.w-80)),b.y+40+((i*151)%(b.h-80)),14,0,7);ctx.fill()}}}
+  for(const c of cars){const q=carPos(c);if(on(q.x-20,q.y-20,40,40))drawCar(q.x,q.y,q.a,c.col,c.stun>0,true)}
+  const pulse=1+Math.sin(t/12)*.08;ctx.strokeStyle='#ffb800';ctx.lineWidth=6;ctx.shadowColor='#ffb800';ctx.shadowBlur=20;ctx.beginPath();ctx.arc(tgt.x,tgt.y,42*pulse,0,7);ctx.stroke();ctx.shadowBlur=0;
+  drawCar(me.x,me.y,me.a,'#ffb800',K.B,true);
+  for(const b of blocks)for(const o of b.b){if(!on(o.x,o.y,o.w,o.h))continue;
+    const ex=(o.x+o.w/2-camX)*o.ht/1000,ey=(o.y+o.h/2-camY)*o.ht/1000;
+    ctx.fillStyle='#0008';ctx.fillRect(o.x+6,o.y+8,o.w,o.h);
+    for(let s=0;s<=4;s++){const f=s/4;ctx.fillStyle=s<4?`hsl(230 22% ${12+s*3}%)`:'#1a1f31';ctx.fillRect(o.x+ex*f,o.y+ey*f,o.w,o.h)}
+    ctx.fillStyle='#1a1f31';ctx.fillRect(o.x+ex,o.y+ey,o.w,o.h);
+    ctx.strokeStyle=o.col;ctx.lineWidth=3;ctx.strokeRect(o.x+ex+2,o.y+ey+2,o.w-4,o.h-4);
+    ctx.fillStyle=o.col+'55';ctx.fillRect(o.x+ex+o.w*.3,o.y+ey+o.h*.3,o.w*.4,o.h*.4)}
+  const a=Math.atan2(tgt.y-me.y,tgt.x-me.x);ctx.save();ctx.translate(me.x+Math.cos(a)*64,me.y+Math.sin(a)*64);ctx.rotate(a);ctx.fillStyle='#ffb800';ctx.beginPath();ctx.moveTo(12,0);ctx.lineTo(-8,-9);ctx.lineTo(-8,9);ctx.fill();ctx.restore();
+  ctx.restore();
+  const mw=88,mx=W-mw-10,my=10,sc=mw/(WS+RW);ctx.fillStyle='#0a0c14bb';ctx.fillRect(mx,my,mw,mw);ctx.strokeStyle='#39415c';ctx.lineWidth=1;ctx.beginPath();
+  for(let k=0;k<=N;k++){const p=(k*CS+RW/2)*sc;ctx.moveTo(mx+p,my);ctx.lineTo(mx+p,my+mw);ctx.moveTo(mx,my+p);ctx.lineTo(mx+mw,my+p)}ctx.stroke();
+  const mp=(x,y,c,r)=>{ctx.fillStyle=c;ctx.beginPath();ctx.arc(mx+(x+RW/2)*sc,my+(y+RW/2)*sc,r,0,7);ctx.fill()};mp(tgt.x,tgt.y,'#ffb800',4);mp(me.x,me.y,'#fff',3)
+}
+let last=0;
+function loop(ts){const k=Math.min(2.5,(ts-last)/16.67||1);last=ts;t++;if(run)update(k);draw();requestAnimationFrame(loop)}
+function start(){me.x=CS;me.y=CS;me.a=0;me.vx=me.vy=0;score=0;time=45;run=true;newTarget();$('msg').classList.add('hide')}
+const hold=(id,key)=>{const b=$(id);b.addEventListener('pointerdown',e=>{K[key]=1;b.setPointerCapture(e.pointerId)});['pointerup','pointercancel'].forEach(v=>b.addEventListener(v,()=>K[key]=0))};
+hold('L','L');hold('R','R');hold('G','G');hold('B','B');
+const km={ArrowLeft:'L',a:'L',ArrowRight:'R',d:'R',ArrowUp:'G',w:'G',ArrowDown:'B',s:'B',' ':'S'};
+addEventListener('keydown',e=>{if(km[e.key]){K[km[e.key]]=1;e.preventDefault()}});addEventListener('keyup',e=>{if(km[e.key])K[km[e.key]]=0});
+$('go').onclick=start;addEventListener('resize',size);size();requestAnimationFrame(loop);
+</script>
+</body>
+</html>

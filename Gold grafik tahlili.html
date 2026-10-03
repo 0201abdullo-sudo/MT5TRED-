@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gold grafik tahlili</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f4f5f7;--pn:#fff;--ln:#dfe2e8;--tx:#1b1f27;--mu:#6b7280;--ac:#2563eb;--up:#0e9f6e;--dn:#e02f44;--gd:#d99a00}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0b0e13;--pn:#12161d;--ln:#232a35;--tx:#e6e9ef;--mu:#8a93a3;--ac:#5b9dff;--up:#26c281;--dn:#ff4d5e;--gd:#f5b232}}
+:root[data-theme="dark"]{--bg:#0b0e13;--pn:#12161d;--ln:#232a35;--tx:#e6e9ef;--mu:#8a93a3;--ac:#5b9dff;--up:#26c281;--dn:#ff4d5e;--gd:#f5b232}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:12px}
+h1{font-size:19px;margin:4px 0 10px}
+.drop{position:relative;border:2px dashed var(--ln);border-radius:12px;background:var(--pn);padding:22px 14px;text-align:center;color:var(--mu);cursor:pointer}
+.drop:focus-visible,button:focus-visible{outline:2px solid var(--ac);outline-offset:2px}
+#file{position:absolute;inset:0;width:100%;height:100%;opacity:0;cursor:pointer;font-size:0}
+.drop:focus-within{outline:2px solid var(--ac);outline-offset:2px}
+.drop.on{border-color:var(--ac)}
+.stage{margin-top:12px;background:var(--pn);border:1px solid var(--ln);border-radius:12px;overflow:hidden;display:none}
+canvas{width:100%;height:auto;display:block}
+button{font:inherit;font-weight:650;border:0;border-radius:10px;padding:13px;width:100%;margin-top:10px;background:var(--ac);color:#fff;cursor:pointer;touch-action:manipulation}
+button:disabled{opacity:.45;cursor:not-allowed}
+.res{margin-top:12px;background:var(--pn);border:1px solid var(--ln);border-radius:12px;padding:14px;display:none}
+.badge{display:inline-block;font-size:26px;font-weight:800;border-radius:10px;padding:6px 18px;color:#fff}
+.BUY{background:var(--up)}.SELL{background:var(--dn)}.WAIT{background:var(--mu)}
+.res h3{margin:12px 0 4px;font-size:14px;color:var(--mu);font-weight:600}
+.res p{margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:12px;color:var(--mu)}
+.legend i{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-1px;margin-right:4px}
+.warn{margin-top:12px;font-size:12px;color:var(--mu)}
+.err{color:var(--dn);margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Gold grafik tahlili</h1>
+  <div class="drop" id="drop"><span id="dt">MT5 grafigi skrinshotini shu yerga tashlang yoki bosib tanlang</span><input type="file" id="file" accept="image/*" aria-label="Rasm tanlash"></div>
+  <div class="stage" id="stage"><canvas id="cv"></canvas></div>
+  <button id="run" disabled>Tahlil qilish</button>
+  <div class="err" id="err" role="alert"></div>
+  <div class="res" id="res">
+    <span class="badge" id="sig"></span>
+    <h3>Sabab</h3><p id="why"></p>
+    <h3>Indikatorlar va tendensiya</h3><p id="ind"></p>
+    <h3>Savdo darajalari</h3><p id="lv"></p>
+    <div class="legend"><span><i style="background:#26c281"></i>Qo'llab-quvvatlash</span><span><i style="background:#ff4d5e"></i>Qarshilik</span><span><i style="background:#f5b232"></i>Fibonachchi</span><span><i style="background:#5b9dff"></i>Trend chizig'i</span></div>
+  </div>
+  <p class="warn">Bu sun'iy intellekt tahlili, o'quv maqsadida. Chiziqlar taxminiy joylashadi va hech qanday natijaga kafolat bermaydi. Moliyaviy maslahat emas, savdoda pulni yo'qotish mumkin.</p>
+</div>
+<script>
+const $=id=>document.getElementById(id),cv=$('cv'),ctx=cv.getContext('2d');
+let img=null,file=null,sample=null,caps=null;
+(async()=>{try{sample=await claude.use("sample");if(sample)caps=await sample.limits().catch(()=>null)}catch(e){}
+  if(!sample)$('err').textContent="Tahlil faqat claude.ai ichida ochilganda ishlaydi.";else if(!caps||!caps.images)$('err').textContent="Bu ko'rinishda rasm yuborish mumkin emas."})();
+const drop=$('drop');
+drop.ondragover=e=>{e.preventDefault();drop.classList.add('on')};drop.ondragleave=()=>drop.classList.remove('on');
+drop.ondrop=e=>{e.preventDefault();drop.classList.remove('on');if(e.dataTransfer.files[0])load(e.dataTransfer.files[0])};
+$('file').onchange=e=>{if(e.target.files[0])load(e.target.files[0])};
+function load(f){
+  file=f;const u=URL.createObjectURL(f);img=new Image();
+  img.onload=()=>{cv.width=img.naturalWidth;cv.height=img.naturalHeight;ctx.drawImage(img,0,0);$('stage').style.display='block';$('run').disabled=!sample;$('res').style.display='none';$('err').textContent='';$('dt').textContent=f.name+' (boshqa rasm tanlash uchun bosing)'};
+  img.src=u}
+const PROMPT=`This is a screenshot of an MetaTrader 5 chart, most likely XAUUSD (gold). Do a technical analysis for educational purposes. Reply with ONLY one JSON object of this exact shape:
+{"trend":"up|down|range",
+"swing_high":{"x":0.0,"y":0.0},"swing_low":{"x":0.0,"y":0.0},
+"zones":[{"type":"support|resistance","y1":0.0,"y2":0.0,"price":""}],
+"trendline":{"x1":0.0,"y1":0.0,"x2":0.0,"y2":0.0} or null,
+"signal":"BUY|SELL|WAIT",
+"entry":{"y":0.0,"price":""} or null,"sl":{"y":0.0,"price":""} or null,"tp":{"y":0.0,"price":""} or null,
+"reason":"2-3 sentences","indicators":"1-3 sentences"}
+Rules: all x and y are fractions of the image width and height, (0,0) is the top-left corner of the whole image, y grows downward. swing_high and swing_low are the most recent clear swing extremes used for a Fibonacci retracement (use the candle wicks, not the indicator panes). Give at most 2 support and 2 resistance zones closest to the current price, each with y1 smaller than y2 (a band of about 0.01-0.03 height). Read the price axis to fill the price text when it is legible, otherwise use an empty string. Describe any visible indicators (moving averages, RSI, MACD, Bollinger, etc.) and what they show in "indicators". Use BUY or SELL only when trend, levels and indicators agree, otherwise WAIT, and be honest about uncertainty. Write "reason" and "indicators" in Uzbek (Latin script). If the image is not a price chart, reply {"error":"Bu grafik emas"}.`;
+$('run').onclick=async()=>{
+  $('err').textContent='';$('run').disabled=true;$('run').textContent='Tahlil qilinmoqda...';
+  try{const d=await sample.json(PROMPT,{images:file,modelTier:'complex'});if(d.error)throw{code:'x',message:d.error};show(d)}
+  catch(e){$('err').textContent={not_granted:"Ruxsat berilmadi.",rate_limited:"Limit tugadi, keyinroq urinib ko'ring.",image_rejected:"Rasm mos kelmadi, boshqasini tanlang.",invalid_json:"Javobni o'qib bo'lmadi, qayta urinib ko'ring."}[e.code]||e.message||"Xatolik, qayta urinib ko'ring."}
+  finally{$('run').disabled=false;$('run').textContent='Qayta tahlil qilish'}
+};
+const clamp=v=>Math.max(0,Math.min(1,+v||0));
+function show(d){
+  const w=cv.width,h=cv.height,fs=Math.max(13,Math.round(w/60));
+  ctx.drawImage(img,0,0);ctx.font=`600 ${fs}px system-ui,sans-serif`;ctx.textBaseline='middle';
+  const lab=(t,x,y,c)=>{const m=ctx.measureText(t).width+10;ctx.fillStyle=c;ctx.fillRect(x,y-fs*.8,m,fs*1.6);ctx.fillStyle='#fff';ctx.fillText(t,x+5,y)};
+  (d.zones||[]).forEach(z=>{const y1=clamp(z.y1)*h,y2=clamp(z.y2)*h,sup=z.type==='support',c=sup?'38,194,129':'255,77,94';
+    ctx.fillStyle=`rgba(${c},.28)`;ctx.fillRect(0,y1,w,Math.max(4,y2-y1));ctx.strokeStyle=`rgb(${c})`;ctx.lineWidth=2;ctx.strokeRect(0,y1,w,Math.max(4,y2-y1));
+    lab((sup?'Support ':'Qarshilik ')+(z.price||''),8,y1-fs,`rgb(${c})`)});
+  const sh=d.swing_high,sl=d.swing_low;
+  if(sh&&sl){const yH=clamp(sh.y)*h,yL=clamp(sl.y)*h,up=d.trend!=='down';
+    [0,.236,.382,.5,.618,.786,1].forEach(r=>{const y=up?yH+r*(yL-yH):yL+r*(yH-yL),key=r===.5||r===.618;
+      ctx.strokeStyle=key?'#f5b232':'#f5b232aa';ctx.lineWidth=key?2.5:1.5;ctx.setLineDash([10,7]);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();ctx.setLineDash([]);
+      const t=(r*100).toFixed(r===.236||r===.382||r===.618||r===.786?1:0)+'%';const m=ctx.measureText(t).width+10;lab(t,w-m-4,y,'#b07a00')});
+    ctx.fillStyle='#f5b232';[[sh,'H'],[sl,'L']].forEach(([p])=>{ctx.beginPath();ctx.arc(clamp(p.x)*w,clamp(p.y)*h,fs/2.2,0,7);ctx.fill()})}
+  const tl=d.trendline;if(tl){const x1=clamp(tl.x1)*w,y1=clamp(tl.y1)*h,x2=clamp(tl.x2)*w,y2=clamp(tl.y2)*h,k=(y2-y1)/((x2-x1)||1);
+    ctx.strokeStyle='#5b9dff';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(w,y2+k*(w-x2));ctx.stroke()}
+  [['entry','Kirish','#5b9dff'],['sl','Stop','#e02f44'],['tp','Take','#1fa971']].forEach(([k,n,c])=>{const o=d[k];if(!o||d.signal==='WAIT')return;
+    const y=clamp(o.y)*h;ctx.strokeStyle=c;ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke();lab(n+' '+(o.price||''),w*.42,y,c)});
+  const s=['BUY','SELL'].includes(d.signal)?d.signal:'WAIT';$('sig').className='badge '+s;$('sig').textContent=s==='WAIT'?'KUTING':s;
+  $('why').textContent=d.reason||'';$('ind').textContent=d.indicators||'';
+  const L=[];['entry','sl','tp'].forEach(k=>{if(d[k]&&d[k].price&&s!=='WAIT')L.push({entry:'Kirish',sl:'Stop-loss',tp:'Take-profit'}[k]+': '+d[k].price)});
+  $('lv').textContent=L.length?L.join(' | '):(s==='WAIT'?"Aniq signal yo'q, kutish tavsiya etiladi.":"Narx belgisi o'qilmadi, daraja chiziqlarini grafikda ko'ring.");
+  $('res').style.display='block';$('stage').scrollIntoView({behavior:'smooth',block:'start'})
+}
+</script>
+</body>
+</html>
